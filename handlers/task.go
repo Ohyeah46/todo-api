@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -17,7 +18,7 @@ func NewTaskHandler(db *gorm.DB) *TaskHandler {
 	return &TaskHandler{DB: db}
 }
 
-// ✅ CreateTask: создаёт задачу для текущего авторизованного пользователя
+// CreateTask: создаёт задачу для текущего авторизованного пользователя с асинхронным логированием
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task models.Task
 
@@ -35,19 +36,22 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	}
 
 	task.UserID = userID.(uint)
+	task.SetTitle("[Создано] " + task.Title)
 
 	if err := h.DB.Create(&task).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось создать задачу"})
 		return
 	}
 
-	task.UserID = userID.(uint)
-	task.SetTitle("[Создано] " + task.Title)
+	// Асинхронное логирование создания задачи
+	go func(t models.Task) {
+		log.Printf("Task created asynchronously: ID=%d, Title=%s\n", t.ID, t.Title)
+	}(task)
 
 	c.JSON(http.StatusCreated, task)
 }
 
-// ✅ GetTasks: возвращает только задачи текущего пользователя
+// GetTasks: возвращает задачи текущего пользователя
 func (h *TaskHandler) GetTasks(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -63,7 +67,7 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
-// Остальные методы пока без авторизации (можно доработать позже)
+// Остальные методы без изменений, пример:
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -76,8 +80,7 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Задача не найдена"})
 		return
 	}
-	
-	// Используем методы структур:
+
 	summary := task.ShortSummary()
 	overdue := task.IsOverdue()
 
@@ -86,7 +89,6 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		"summary": summary,
 		"overdue": overdue,
 	})
-
 	c.JSON(http.StatusOK, task)
 }
 
