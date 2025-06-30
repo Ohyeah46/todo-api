@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
 	"log"
+
+	"github.com/gin-gonic/gin"
 	"todo-api/database"
 	"todo-api/handlers"
 )
@@ -17,6 +18,9 @@ func main() {
 	// Миграция моделей User и Task
 	database.Migrate(db)
 
+	// Инициализация фонового воркера и очереди
+	handlers.InitTaskWorker()
+
 	// Инициализация роутера Gin
 	router := gin.Default()
 
@@ -29,11 +33,13 @@ func main() {
 	router.POST("/login", authHandler.Login)
 	router.GET("/debug/slice", taskHandler.DebugSliceUsage)
 	router.GET("/debug/map", taskHandler.DebugMapUsage)
+	router.GET("/async-example", taskHandler.AsyncProcessExample)
 
-	// Группа защищённых маршрутов
+	// Группа защищённых маршрутов (с JWT)
 	auth := router.Group("/")
 	auth.Use(handlers.AuthMiddleware())
 
+	auth.POST("/enqueue", taskHandler.EnqueueTask)
 	auth.POST("/tasks", taskHandler.CreateTask)
 	auth.GET("/tasks", taskHandler.GetTasks)
 	auth.GET("/tasks/:id", taskHandler.GetTask)

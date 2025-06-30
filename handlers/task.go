@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -22,14 +24,12 @@ func NewTaskHandler(db *gorm.DB) *TaskHandler {
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task models.Task
 
-	// Получаем user_id из JWT (установлен в middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
 		return
 	}
 
-	// Привязываем задачу к пользователю
 	if err := c.ShouldBindJSON(&task); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -43,7 +43,6 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	// Асинхронное логирование создания задачи
 	go func(t models.Task) {
 		log.Printf("Task created asynchronously: ID=%d, Title=%s\n", t.ID, t.Title)
 	}(task)
@@ -67,7 +66,7 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
-// Остальные методы без изменений, пример:
+// GetTask: возвращает одну задачу + методы структуры
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -89,7 +88,6 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		"summary": summary,
 		"overdue": overdue,
 	})
-	c.JSON(http.StatusOK, task)
 }
 
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
@@ -138,21 +136,20 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Задача удалена"})
 }
 
+// DebugSliceUsage демонстрирует работу со слайсами
 func (h *TaskHandler) DebugSliceUsage(c *gin.Context) {
-	// Имитируем получение задач из базы
 	tasks := []models.Task{
 		{Title: "Задача 1"},
 		{Title: "Задача 2"},
 	}
 
-	// Добавим задачу динамически
 	newTask := models.Task{Title: "Задача 3"}
 	tasks = append(tasks, newTask)
 
-	// Вернём клиенту
 	c.JSON(http.StatusOK, tasks)
 }
 
+// DebugMapUsage демонстрирует работу с мапой
 func (h *TaskHandler) DebugMapUsage(c *gin.Context) {
 	tasks := []models.Task{
 		{Model: gorm.Model{ID: 1}, Title: "Задача 1"},
@@ -171,4 +168,54 @@ func (h *TaskHandler) DebugMapUsage(c *gin.Context) {
 		"task_2":  task,
 		"taskMap": taskMap,
 	})
+}
+
+// AsyncProcessExample демонстрирует каналы, селекты и контекст
+func (h *TaskHandler) AsyncProcessExample(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resultCh := make(chan string)
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		resultCh <- "Результат из горутины 1"
+	}()
+
+	go func() {
+		time.Sleep(3 * time.Second)
+		resultCh <- "Результат из горутины 2"
+	}()
+
+	select {
+	case res := <-resultCh:
+		c.JSON(http.StatusOK, gin.H{"result": res})
+	case <-ctx.Done():
+		c.JSON(http.StatusRequestTimeout, gin.H{"error": "Превышено время ожидания"})
+	}
+}
+
+func (h *TaskHandler) EnqueueTask(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+
+	var input struct {
+		Title string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	task := TaskMessage{
+		UserID: userID.(uint),
+		Title:  input.Title,
+	}
+
+	Queue <- task // отправка в очередь
+
+	c.JSON(http.StatusOK, gin.H{"message": "Задача поставлена в очередь"})
 }
