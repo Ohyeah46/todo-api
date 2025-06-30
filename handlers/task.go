@@ -76,6 +76,16 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Задача не найдена"})
 		return
 	}
+	
+	// Используем методы структур:
+	summary := task.ShortSummary()
+	overdue := task.IsOverdue()
+
+	c.JSON(http.StatusOK, gin.H{
+		"task":    task,
+		"summary": summary,
+		"overdue": overdue,
+	})
 
 	c.JSON(http.StatusOK, task)
 }

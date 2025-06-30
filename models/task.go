@@ -1,6 +1,9 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 type Task struct {
 	gorm.Model
@@ -12,4 +15,19 @@ type Task struct {
 
 func (t *Task) SetTitle(newTitle string) {
 	t.Title = newTitle
+}
+
+// Метод отмечает задачу как выполненную
+func (t *Task) MarkCompleted() {
+	t.Completed = true
+}
+
+// Метод возвращает короткое описание задачи
+func (t *Task) ShortSummary() string {
+	return t.Title + ": " + t.Description
+}
+
+// Метод проверяет, просрочена ли задача (например, если CreatedAt старше 7 дней)
+func (t *Task) IsOverdue() bool {
+	return time.Since(t.CreatedAt) > 7*24*time.Hour && !t.Completed
 }
