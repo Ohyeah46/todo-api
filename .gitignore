@@ -1,0 +1,7 @@
+/todo.db
+/bin/
+/vendor/
+/*.exe
+*.log
+*.tmp
+*.out

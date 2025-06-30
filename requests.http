@@ -1,0 +1,32 @@
+### Регистрация
+POST http://localhost:8080/register
+Content-Type: application/json
+
+{
+  "username": "vitaliy",
+  "password": "123456"
+}
+
+### Логин
+POST http://localhost:8080/login
+Content-Type: application/json
+
+{
+  "username": "vitaliy",
+  "password": "123456"
+}
+
+### Создание задачи (замени <token> после логина)
+POST http://localhost:8080/tasks
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "Задача через GoLand",
+  "description": "Пример через .http",
+  "completed": false
+}
+
+### Получение задач
+GET http://localhost:8080/tasks
+Authorization: Bearer <token>
