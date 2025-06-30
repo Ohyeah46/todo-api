@@ -125,3 +125,38 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Задача удалена"})
 }
+
+func (h *TaskHandler) DebugSliceUsage(c *gin.Context) {
+	// Имитируем получение задач из базы
+	tasks := []models.Task{
+		{Title: "Задача 1"},
+		{Title: "Задача 2"},
+	}
+
+	// Добавим задачу динамически
+	newTask := models.Task{Title: "Задача 3"}
+	tasks = append(tasks, newTask)
+
+	// Вернём клиенту
+	c.JSON(http.StatusOK, tasks)
+}
+
+func (h *TaskHandler) DebugMapUsage(c *gin.Context) {
+	tasks := []models.Task{
+		{Model: gorm.Model{ID: 1}, Title: "Задача 1"},
+		{Model: gorm.Model{ID: 2}, Title: "Задача 2"},
+		{Model: gorm.Model{ID: 3}, Title: "Задача 3"},
+	}
+
+	taskMap := make(map[uint]models.Task)
+	for _, task := range tasks {
+		taskMap[task.ID] = task
+	}
+
+	task := taskMap[2]
+
+	c.JSON(http.StatusOK, gin.H{
+		"task_2":  task,
+		"taskMap": taskMap,
+	})
+}

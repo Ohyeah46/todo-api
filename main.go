@@ -27,6 +27,8 @@ func main() {
 	// Публичные маршруты
 	router.POST("/register", authHandler.Register)
 	router.POST("/login", authHandler.Login)
+	router.GET("/debug/slice", taskHandler.DebugSliceUsage)
+	router.GET("/debug/map", taskHandler.DebugMapUsage)
 
 	// Группа защищённых маршрутов
 	auth := router.Group("/")
