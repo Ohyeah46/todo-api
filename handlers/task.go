@@ -41,6 +41,9 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
+	task.UserID = userID.(uint)
+	task.SetTitle("[Создано] " + task.Title)
+
 	c.JSON(http.StatusCreated, task)
 }
 
