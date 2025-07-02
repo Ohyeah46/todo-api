@@ -9,44 +9,52 @@ import (
 )
 
 func main() {
-	// Подключение к БД
+	// Подключение к GORM
 	db, err := database.ConnectPostgres()
 	if err != nil {
-		log.Fatalf("Ошибка подключения к БД: %v", err)
+		log.Fatalf("Ошибка подключения к GORM: %v", err)
 	}
-
-	// Миграция моделей User и Task
 	database.Migrate(db)
 
-	// Инициализация фонового воркера и очереди
+	// Подключение к pgxpool для sqlc
+	pool, err := database.ConnectPGX()
+	if err != nil {
+		log.Fatalf("Ошибка подключения к PGX: %v", err)
+	}
+	defer pool.Close()
+
 	handlers.InitTaskWorker()
 
-	// Инициализация роутера Gin
 	router := gin.Default()
 
-	// Инициализация хендлеров
 	authHandler := handlers.NewAuthHandler(db)
 	taskHandler := handlers.NewTaskHandler(db)
+	taskSQLCHandler := handlers.NewTaskSQLCHandler(pool)
 
-	// Публичные маршруты
+	// Публичные роуты
 	router.POST("/register", authHandler.Register)
 	router.POST("/login", authHandler.Login)
+
+	// Отладочные
 	router.GET("/debug/slice", taskHandler.DebugSliceUsage)
 	router.GET("/debug/map", taskHandler.DebugMapUsage)
 	router.GET("/async-example", taskHandler.AsyncProcessExample)
 
-	// Группа защищённых маршрутов (с JWT)
 	auth := router.Group("/")
 	auth.Use(handlers.AuthMiddleware())
 
 	auth.POST("/enqueue", taskHandler.EnqueueTask)
-	auth.POST("/tasks", taskHandler.CreateTask)
-	auth.GET("/tasks", taskHandler.GetTasks)
-	auth.GET("/tasks/:id", taskHandler.GetTask)
+	auth.POST("/tasks", taskHandler.CreateTask) // GORM
+	auth.GET("/tasks", taskHandler.GetTasks)    // GORM
+	auth.GET("/tasks/:id", taskHandler.GetTask) // GORM
 	auth.PUT("/tasks/:id", taskHandler.UpdateTask)
 	auth.DELETE("/tasks/:id", taskHandler.DeleteTask)
 
-	// Запуск сервера
+	// SQLC маршруты (тестовые)
+	auth.GET("/sqlc/tasks", taskSQLCHandler.GetTasks)
+	auth.GET("/sqlc/tasks/:id", taskSQLCHandler.GetTask)
+	auth.POST("/sqlc/tasks", taskSQLCHandler.CreateTask)
+
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %v", err)
 	}

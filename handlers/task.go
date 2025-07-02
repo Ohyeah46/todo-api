@@ -9,8 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"github.com/jackc/pgx/v5/pgxpool" // pgxpool для sqlc подключения
+	"todo-api/internal/db"            // sqlc сгенерированный пакет
 	"todo-api/models"
 )
+
+// ---------- Хендлер с GORM ----------
 
 type TaskHandler struct {
 	DB *gorm.DB
@@ -20,7 +25,6 @@ func NewTaskHandler(db *gorm.DB) *TaskHandler {
 	return &TaskHandler{DB: db}
 }
 
-// CreateTask: создаёт задачу для текущего авторизованного пользователя с асинхронным логированием
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var task models.Task
 
@@ -50,7 +54,6 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	c.JSON(http.StatusCreated, task)
 }
 
-// GetTasks: возвращает задачи текущего пользователя
 func (h *TaskHandler) GetTasks(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -66,7 +69,6 @@ func (h *TaskHandler) GetTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, tasks)
 }
 
-// GetTask: возвращает одну задачу + методы структуры
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -218,4 +220,63 @@ func (h *TaskHandler) EnqueueTask(c *gin.Context) {
 	Queue <- task // отправка в очередь
 
 	c.JSON(http.StatusOK, gin.H{"message": "Задача поставлена в очередь"})
+}
+
+// ---------- Новый хендлер с sqlc ----------
+
+type TaskSQLCHandler struct {
+	Queries *db.Queries
+}
+
+func NewTaskSQLCHandler(pool *pgxpool.Pool) *TaskSQLCHandler {
+	return &TaskSQLCHandler{
+		Queries: db.New(pool),
+	}
+}
+
+func (h *TaskSQLCHandler) CreateTask(c *gin.Context) {
+	var input struct {
+		Title     string `json:"title" binding:"required"`
+		Completed bool   `json:"completed"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := context.Background()
+	task, err := h.Queries.CreateTask(ctx, db.CreateTaskParams{
+		Title:     input.Title,
+		Completed: input.Completed,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка создания задачи"})
+		return
+	}
+	c.JSON(http.StatusCreated, task)
+}
+
+func (h *TaskSQLCHandler) GetTasks(c *gin.Context) {
+	ctx := context.Background()
+	tasks, err := h.Queries.ListTasks(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка получения задач"})
+		return
+	}
+	c.JSON(http.StatusOK, tasks)
+}
+
+func (h *TaskSQLCHandler) GetTask(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверный ID"})
+		return
+	}
+	ctx := context.Background()
+	task, err := h.Queries.GetTask(ctx, int32(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Задача не найдена"})
+		return
+	}
+	c.JSON(http.StatusOK, task)
 }
